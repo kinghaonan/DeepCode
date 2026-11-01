@@ -1,0 +1,132 @@
+.notice {
+  position: absolute;
+  z-index: 40;
+  top: 16px;
+  right: 16px;
+  display: grid;
+  width: min(440px, calc(100vw - 28px));
+  grid-template-columns: 20px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 11px;
+  padding: 14px 15px;
+  border: 1px solid color-mix(in srgb, var(--danger) 35%, var(--border-subtle));
+  border-left: 3px solid var(--danger);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--surface-raised) 88%, var(--danger-soft));
+  box-shadow: var(--elevation-3);
+  backdrop-filter: blur(18px);
+  color: var(--danger);
+}
+
+.notice > svg {
+  flex: 0 0 auto;
+  color: var(--danger);
+}
+
+.notice[data-reconnecting="true"] {
+  border-color: color-mix(in srgb, var(--signal) 38%, var(--border-subtle));
+  border-left: 3px solid var(--signal);
+  background: color-mix(in srgb, var(--surface-raised) 90%, var(--signal-soft));
+  color: var(--signal-strong);
+  animation: runtimeNoticePulse 2.2s ease-in-out infinite;
+}
+
+.notice[data-reconnecting="true"] > svg {
+  color: var(--signal-strong);
+}
+
+@keyframes runtimeNoticePulse {
+  0%,
+  100% {
+    box-shadow: var(--elevation-3);
+  }
+
+  50% {
+    box-shadow: var(--elevation-3), 0 0 0 3px var(--signal-soft);
+  }
+}
+
+.copy {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.copy strong {
+  color: var(--text-primary);
+  font: 9.5px var(--font-mono);
+}
+
+.copy span {
+  overflow: hidden;
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 1.45;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.actions button {
+  display: inline-flex;
+  min-height: 35px;
+  align-items: center;
+  gap: 5px;
+  padding: 0 10px;
+  border: 1px solid color-mix(in srgb, var(--danger) 24%, var(--border-subtle));
+  border-radius: var(--radius-sm);
+  background: var(--surface-raised);
+  color: var(--danger);
+  font-size: 10.5px;
+  font-weight: 610;
+  transition:
+    border-color 140ms ease,
+    background-color 140ms ease,
+    color 140ms ease;
+}
+
+.actions button:hover:not(:disabled) {
+  border-color: var(--danger);
+  background: var(--danger-soft);
+}
+
+.notice[data-reconnecting="true"] .actions button {
+  border-color: color-mix(in srgb, var(--signal) 28%, var(--border-subtle));
+  color: var(--signal-strong);
+}
+
+.notice[data-reconnecting="true"] .actions button:hover:not(:disabled) {
+  border-color: var(--signal);
+  background: var(--signal-soft);
+}
+
+.actions .dismiss {
+  width: 30px;
+  padding: 0;
+  justify-content: center;
+  border-color: transparent;
+  background: transparent;
+  color: var(--text-tertiary);
+}
+
+.notice[data-reconnecting="true"] .actions .dismiss {
+  border-color: transparent;
+  background: transparent;
+  color: var(--text-tertiary);
+}
+
+@media (max-width: 720px) {
+  .notice {
+    right: 8px;
+    width: calc(100vw - 16px);
+  }
+
+  .copy span {
+    white-space: normal;
+  }
+}

@@ -1,0 +1,294 @@
+import type { TFunction } from "i18next";
+import { useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
+
+import type {
+  JsonObject,
+  WorkflowRun,
+  WorkflowStartParams,
+} from "../../generated/app-server";
+import styles from "./WorkflowComposer.module.css";
+
+type SourceType = WorkflowStartParams["sourceType"];
+
+interface WorkflowComposerProps {
+  enabled: boolean;
+  busy: boolean;
+  workflow: WorkflowRun | null;
+  disabledReason: string | null;
+  onPickFile(): Promise<string | null>;
+  onStart(
+    sourceType: SourceType,
+    source: string,
+    options: NonNullable<WorkflowStartParams["options"]>,
+  ): Promise<void>;
+  onRetry(workflowRunId: string): Promise<void>;
+  onRespond(
+    workflowRunId: string,
+    interactionId: string,
+    action: "approve" | "modify" | "cancel",
+    feedback?: string,
+  ): Promise<void>;
+  onInterrupt(): void;
+}
+
+const sourceLabels: Array<[SourceType, string]> = [
+  ["local", "workflow.source.document"],
+  ["url", "workflow.source.url"],
+  ["repository", "workflow.source.repository"],
+  ["requirement", "workflow.source.requirement"],
+];
+
+export function WorkflowComposer({
+  enabled,
+  busy,
+  workflow,
+  disabledReason,
+  onPickFile,
+  onStart,
+  onRetry,
+  onRespond,
+  onInterrupt,
+}: WorkflowComposerProps) {
+  const { t } = useTranslation();
+  const [sourceType, setSourceType] = useState<SourceType>("local");
+  const [source, setSource] = useState("");
+  const [enableIndexing, setEnableIndexing] = useState(false);
+  const [planReview, setPlanReview] = useState(true);
+  const [feedback, setFeedback] = useState("");
+  const active = workflow && ["queued", "running", "waiting"].includes(workflow.status);
+  const interaction = useMemo(
+    () => workflowInteraction(workflow, t),
+    [workflow, t],
+  );
+  const progress = workflow?.progressTotal
+    ? Math.round((workflow.progressCurrent / workflow.progressTotal) * 100)
+    : 0;
+
+  const chooseFile = async () => {
+    const path = await onPickFile();
+    if (path) setSource(path);
+  };
+
+  const start = async () => {
+    const value = source.trim();
+    if (!value || !enabled || busy || active) return;
+    await onStart(sourceType, value, { enableIndexing, planReview });
+  };
+
+  const respond = async (action: "approve" | "modify" | "cancel") => {
+    if (!workflow || !interaction) return;
+    await onRespond(workflow.id, interaction.id, action, feedback);
+    if (action !== "modify") setFeedback("");
+  };
+
+  return (
+    <footer className={styles.region}>
+      {active ? (
+        <section className={styles.console} aria-live="polite">
+          <div className={styles.consoleHead}>
+            <div>
+              <span className={styles.kicker}>
+                {t("workflow.attemptKicker", { attempt: workflow.attempt })}
+              </span>
+              <strong>{workflow.currentStage?.replaceAll("_", " ") ?? workflow.status}</strong>
+            </div>
+            <span className={styles.percent}>{progress}%</span>
+          </div>
+          <div
+            className={styles.progress}
+            aria-label={t("workflow.progressAria", { progress })}
+          >
+            <span style={{ width: `${progress}%` }} />
+          </div>
+          {interaction ? (
+            <div className={styles.review}>
+              <div>
+                <span className={styles.kicker}>
+                  {t("workflow.reviewGate")}
+                </span>
+                <h3>{interaction.title}</h3>
+                <p>{interaction.description}</p>
+              </div>
+              {interaction.planPreview ? <pre>{interaction.planPreview}</pre> : null}
+              <textarea
+                value={feedback}
+                onChange={(event) => setFeedback(event.target.value)}
+                placeholder={t("workflow.feedbackPlaceholder")}
+                rows={2}
+              />
+              <div className={styles.reviewActions}>
+                <button type="button" onClick={() => void respond("cancel")}>
+                  {t("workflow.cancelRun")}
+                </button>
+                <button
+                  type="button"
+                  disabled={!feedback.trim() || busy}
+                  onClick={() => void respond("modify")}
+                >
+                  {t("workflow.requestChanges")}
+                </button>
+                <button
+                  className={styles.primary}
+                  type="button"
+                  disabled={busy}
+                  onClick={() => void respond("approve")}
+                >
+                  {t("workflow.approveContinue")}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className={styles.runningRow}>
+              <span>{t("workflow.durableNote")}</span>
+              <button
+                className={styles.danger}
+                type="button"
+                onClick={onInterrupt}
+              >
+                {t("workflow.stop")}
+              </button>
+            </div>
+          )}
+        </section>
+      ) : (
+        <section className={styles.composer}>
+          <div
+            className={styles.sourceTabs}
+            role="tablist"
+            aria-label={t("workflow.inputSource")}
+          >
+            {sourceLabels.map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                role="tab"
+                aria-selected={sourceType === value}
+                onClick={() => {
+                  setSourceType(value);
+                  setSource("");
+                }}
+              >
+                {t(label)}
+              </button>
+            ))}
+          </div>
+          <div className={styles.inputRow}>
+            {sourceType === "requirement" ? (
+              <textarea
+                value={source}
+                onChange={(event) => setSource(event.target.value)}
+                placeholder={t("workflow.requirementPlaceholder")}
+                rows={2}
+                disabled={!enabled}
+              />
+            ) : (
+              <input
+                value={source}
+                onChange={(event) => setSource(event.target.value)}
+                placeholder={placeholderFor(sourceType, t)}
+                readOnly={sourceType === "local"}
+                disabled={!enabled}
+              />
+            )}
+            {sourceType === "local" ? (
+              <button type="button" onClick={() => void chooseFile()} disabled={!enabled}>
+                {t("workflow.chooseFile")}
+              </button>
+            ) : null}
+          </div>
+          <div className={styles.toolbar}>
+            <div className={styles.options}>
+              <label>
+                <input
+                  type="checkbox"
+                  checked={planReview}
+                  onChange={(event) => setPlanReview(event.target.checked)}
+                />
+                {t("workflow.reviewPlan")}
+              </label>
+              <label>
+                <input
+                  type="checkbox"
+                  checked={enableIndexing}
+                  onChange={(event) => setEnableIndexing(event.target.checked)}
+                />
+                {t("workflow.referenceIndexing")}
+              </label>
+            </div>
+            <div className={styles.submit}>
+              <span>{disabledReason ?? terminalSummary(workflow, t)}</span>
+              {workflow?.status === "failed" || workflow?.status === "cancelled" ? (
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => void onRetry(workflow.id)}
+                >
+                  {t("workflow.retryAttempt", {
+                    attempt: workflow.attempt + 1,
+                  })}
+                </button>
+              ) : null}
+              <button
+                className={styles.primary}
+                type="button"
+                disabled={!enabled || busy || !source.trim()}
+                onClick={() => void start()}
+              >
+                {t("workflow.start")}
+              </button>
+            </div>
+          </div>
+        </section>
+      )}
+    </footer>
+  );
+}
+
+interface InteractionView {
+  id: string;
+  title: string;
+  description: string;
+  planPreview: string | null;
+}
+
+function workflowInteraction(
+  workflow: WorkflowRun | null,
+  t: TFunction,
+): InteractionView | null {
+  if (!workflow || workflow.status !== "waiting") return null;
+  const interaction = recordValue(workflow.checkpoint.interaction);
+  if (!interaction || typeof interaction.id !== "string") return null;
+  const request = recordValue(interaction.request) ?? ({} as JsonObject);
+  const data = recordValue(request.data);
+  return {
+    id: interaction.id,
+    title: stringValue(request.title) ?? t("workflow.reviewPlanFallback"),
+    description:
+      stringValue(request.description) ??
+      t("workflow.approveReviseFallback"),
+    planPreview: stringValue(data?.plan_preview),
+  };
+}
+
+function recordValue(value: unknown): JsonObject | null {
+  return typeof value === "object" && value !== null && !Array.isArray(value)
+    ? (value as JsonObject)
+    : null;
+}
+
+function stringValue(value: unknown): string | null {
+  return typeof value === "string" && value.trim() ? value : null;
+}
+
+function placeholderFor(sourceType: SourceType, t: TFunction): string {
+  if (sourceType === "url") return "https://arxiv.org/abs/…";
+  if (sourceType === "repository") return "https://github.com/owner/repository";
+  return t("workflow.localPlaceholder");
+}
+
+function terminalSummary(workflow: WorkflowRun | null, t: TFunction): string {
+  if (!workflow) return t("workflow.completionNote");
+  if (workflow.status === "completed") return t("workflow.lastRunPassed");
+  return workflow.errorMessage ?? t("workflow.lastRunRetryable");
+}
