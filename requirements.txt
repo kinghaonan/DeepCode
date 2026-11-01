@@ -10,7 +10,7 @@ json-repair>=0.30.0
 loguru>=0.7.0
 
 # DeepCode-native LLM + MCP runtime (replaces legacy mcp-agent)
-mcp>=1.29,<2
+mcp>=2.3.0,<3
 mcp-server-git
 nest_asyncio
 openai>=1.55.0
